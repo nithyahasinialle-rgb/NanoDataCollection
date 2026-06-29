@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arduino Recorder</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#111;color:#ddd;padding:20px 16px;min-height:100vh}
+.wrap{max-width:980px;margin:0 auto}
+h1{font-size:.75rem;font-weight:500;letter-spacing:.15em;text-transform:uppercase;color:#444;margin-bottom:16px}
+
+/* Status bar */
+.sbar{display:flex;align-items:center;gap:9px;background:#1a1a1a;border:1px solid #222;border-radius:8px;padding:10px 15px;margin-bottom:14px;font-size:.8rem;color:#555}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:#4ade80;box-shadow:0 0 5px #4ade8066;transition:background .3s}
+.dot.recording{background:#f87171;box-shadow:0 0 5px #f8717166;animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Two column layout */
+.layout{display:grid;grid-template-columns:270px 1fr;gap:14px}
+@media(max-width:680px){.layout{grid-template-columns:1fr}}
+
+.card{background:#1a1a1a;border:1px solid #222;border-radius:10px;padding:16px;margin-bottom:12px}
+.card:last-child{margin-bottom:0}
+.ct{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:#3a3a3a;margin-bottom:10px}
+
+/* Session input */
+.inp{width:100%;background:#111;border:1px solid #252525;border-radius:6px;padding:8px 11px;
+     color:#ddd;font-size:.82rem;outline:none;margin-bottom:10px;transition:border-color .2s}
+.inp:focus{border-color:#6366f1}
+
+/* Volume segments */
+.seg{display:flex;background:#111;border:1px solid #252525;border-radius:6px;overflow:hidden;margin-bottom:12px}
+.seg button{flex:1;padding:7px 4px;background:none;border:none;color:#555;font-size:.78rem;cursor:pointer;transition:all .15s}
+.seg button.on{background:#6366f1;color:#fff}
+.seg button:hover:not(.on){background:#1e1e1e;color:#aaa}
+
+/* Export row */
+.exp-row{display:flex;gap:8px;align-items:center}
+.exp-row .inp{margin:0;flex:1}
+#btn-exp{flex-shrink:0;padding:8px 14px;background:#1e1e1e;border:1px solid #2a2a2a;
+          border-radius:6px;color:#aaa;font-size:.8rem;cursor:pointer;white-space:nowrap;transition:all .15s}
+#btn-exp:hover:not([disabled]){background:#252525;color:#fff;border-color:#444}
+#btn-exp[disabled]{opacity:.35;cursor:default}
+#exp-msg{font-size:.7rem;color:#555;margin-top:7px;min-height:14px}
+
+/* Symbol grid */
+.sym-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;margin-bottom:4px}
+.sym-btn{
+  aspect-ratio:1;border-radius:5px;border:1px solid #1e1e1e;
+  background:#141414;color:#555;font-size:.78rem;font-weight:600;
+  cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:center;
+  user-select:none;
+}
+.sym-btn:hover{border-color:#6366f1;color:#ccc;background:#1a1a2a}
+.sym-btn.sel{background:#6366f1;border-color:#818cf8;color:#fff}
+.sym-btn.full{background:#14291d;border-color:#1e3a1e;color:#4ade80}
+.sym-btn.part{background:#25200a;border-color:#3a300a;color:#f9e2af}
+.sym-btn.sel.full{background:#4ade80;border-color:#4ade80;color:#000}
+
+/* Clear btn */
+.btn-clear{width:100%;margin-top:8px;padding:8px;background:#1e1414;border:1px solid #2a1a1a;
+           border-radius:6px;color:#f87171;font-size:.78rem;cursor:pointer;transition:all .15s}
+.btn-clear:hover{background:#2a1a1a}
+
+/* Right panel – big symbol */
+.sym-display{font-size:5rem;font-weight:700;color:#fff;line-height:1;letter-spacing:-.02em}
+.sym-meta{font-size:.78rem;color:#555;margin-top:4px;margin-bottom:14px}
+
+/* Attempt tabs */
+.att-tabs{display:flex;gap:6px;margin-bottom:12px}
+.att-tab{
+  flex:1;padding:9px 0;border-radius:7px;border:1px solid #222;
+  background:#141414;color:#444;font-size:.8rem;font-weight:600;
+  cursor:pointer;transition:all .12s;text-align:center;user-select:none;
+}
+.att-tab:hover:not(.sel){border-color:#6366f1;color:#888;background:#1a1a1a}
+.att-tab.sel{background:#1e1e3a;border-color:#6366f1;color:#818cf8}
+.att-tab.done{background:#14291d;border-color:#1e3a1e;color:#4ade80}
+.att-tab.sel.done{background:#1a3a2a;border-color:#4ade80;color:#4ade80}
+
+/* Sample progress */
+.samp-row{display:flex;align-items:center;gap:8px;font-size:.73rem;color:#555;margin-bottom:10px}
+.samp-bg{flex:1;background:#1e1e1e;border-radius:3px;height:4px;overflow:hidden}
+.samp-fill{height:100%;background:#818cf8;width:0%;transition:width .15s}
+
+/* Status text */
+.status-txt{font-size:.75rem;color:#555;min-height:18px;margin-bottom:10px;padding:6px 10px;
+            background:#141414;border-radius:6px;border:1px solid #1e1e1e}
+
+/* Action buttons */
+.btn-row{display:flex;gap:8px;margin-bottom:0}
+.btn{padding:11px 0;border:none;border-radius:7px;font-size:.85rem;font-weight:500;
+     cursor:pointer;transition:all .12s;text-align:center;user-select:none}
+.btn:active:not([disabled]){transform:scale(.97)}
+.btn[disabled]{opacity:.3;cursor:default}
+.btn.primary{background:#6366f1;color:#fff;flex:1}
+.btn.primary:hover:not([disabled]){background:#818cf8}
+.btn.ghost{background:#1e1e1e;color:#777;border:1px solid #252525;padding:11px 14px}
+.btn.ghost:hover:not([disabled]){background:#252525;color:#ccc}
+
+/* 2x2 chart grid */
+.charts-4{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.ch-box{background:#141414;border:1px solid #1e1e1e;border-radius:8px;padding:12px}
+.ch-box.active-att{border-color:#6366f155}
+.ch-title{font-size:.65rem;color:#3a3a3a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
+.ch-title.has-data{color:#555}
+.ch-title.is-current{color:#818cf8}
+canvas{width:100%!important;height:100px!important;display:block}
+.ch-empty{font-size:.7rem;color:#252525;text-align:center;padding:34px 0;font-style:italic}
+
+/* Log */
+#log{font-family:"SF Mono","Fira Code","Courier New",monospace;font-size:.68rem;
+     color:#3a3a3a;height:110px;overflow-y:auto;line-height:2}
+.ln-new{color:#a5b4fc}
+
+/* Keyboard hint */
+.hint{text-align:center;font-size:.65rem;color:#2a2a2a;margin-top:10px}
+kbd{background:#1a1a1a;border:1px solid #252525;border-radius:3px;
+    padding:1px 5px;color:#3a3a3a;font-size:.65rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Arduino Recorder</h1>
+
+  <div class="sbar">
+    <span class="dot" id="conn-dot"></span>
+    <span id="sbar-txt">Connected · COM12</span>
+    <span style="margin-left:auto;font-size:.7rem;color:#3a3a3a" id="sbar-right"></span>
+  </div>
+
+  <div class="layout">
+
+    <!-- ── LEFT ── -->
+    <div>
+      <div class="card">
+        <div class="ct">Session name</div>
+        <input class="inp" id="inp-name" type="text" placeholder="e.g. alphabet_whisper_01"
+               oninput="debSession(this.value)">
+        <div class="ct">Volume</div>
+        <div class="seg">
+          <button data-v="whisper" onclick="setVol(this)">Whisper</button>
+          <button data-v="normal"  onclick="setVol(this)" class="on">Normal</button>
+          <button data-v="loud"    onclick="setVol(this)">Loud</button>
+        </div>
+        <div class="ct">Export to Excel</div>
+        <div class="exp-row">
+          <input class="inp" id="inp-exp" type="text" placeholder="filename (no .xlsx)">
+          <button id="btn-exp" onclick="doExport()" disabled>↓ xlsx</button>
+        </div>
+        <div id="exp-msg"></div>
+        <button class="btn-clear" onclick="clearAll()">🗑 Clear all data</button>
+      </div>
+
+      <div class="card">
+        <div class="ct">Letters A – Z</div>
+        <div class="sym-grid" id="grid-L"></div>
+        <div class="ct" style="margin-top:10px">Numbers 0 – 9</div>
+        <div class="sym-grid" id="grid-N"></div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT ── -->
+    <div>
+      <div class="card">
+        <div class="sym-display" id="sym-disp">–</div>
+        <div class="sym-meta"   id="sym-meta">Select a symbol from the left panel</div>
+
+        <div class="att-tabs" id="att-tabs">
+          <div class="att-tab" onclick="selAtt(1)">1</div>
+          <div class="att-tab" onclick="selAtt(2)">2</div>
+          <div class="att-tab" onclick="selAtt(3)">3</div>
+          <div class="att-tab" onclick="selAtt(4)">4</div>
+        </div>
+
+        <div class="samp-row">
+          <span id="samp-n">–</span>
+          <div class="samp-bg"><div class="samp-fill" id="samp-fill"></div></div>
+          <span id="samp-total">/ 2000</span>
+        </div>
+
+        <div class="status-txt" id="status-txt">Ready</div>
+
+        <div class="btn-row">
+          <button class="btn primary" id="btn-start" onclick="doStart()">▶ Start Recording</button>
+          <button class="btn ghost"   id="btn-skip"  onclick="doSkip()">↺ Skip</button>
+          <button class="btn ghost"   id="btn-next"  onclick="doNext()">→ Next</button>
+        </div>
+      </div>
+
+      <!-- 4 waveform boxes -->
+      <div class="charts-4">
+        <div class="ch-box" id="chbox-1"><div class="ch-title" id="chtitle-1">Attempt 1</div><div class="ch-empty" id="chempty-1">no data</div></div>
+        <div class="ch-box" id="chbox-2"><div class="ch-title" id="chtitle-2">Attempt 2</div><div class="ch-empty" id="chempty-2">no data</div></div>
+        <div class="ch-box" id="chbox-3"><div class="ch-title" id="chtitle-3">Attempt 3</div><div class="ch-empty" id="chempty-3">no data</div></div>
+        <div class="ch-box" id="chbox-4"><div class="ch-title" id="chtitle-4">Attempt 4</div><div class="ch-empty" id="chempty-4">no data</div></div>
+      </div>
+
+      <div class="card">
+        <div class="ct">Log</div>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+  <p class="hint"><kbd>Space</kbd> start &nbsp;·&nbsp; <kbd>S</kbd> skip &nbsp;·&nbsp; <kbd>N</kbd> next attempt</p>
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+const DIGITS  = [...'0123456789'];
+
+// ── Per-attempt canvas & last-drawn-length cache ──────────────────────────────
+const cvs     = {1:null, 2:null, 3:null, 4:null};
+const lastLen = {1:-1,   2:-1,   3:-1,   4:-1  };
+// Cache fetched data so we don't re-fetch every poll
+const dataCache = {};   // key → Float32Array or plain array
+
+// ── Previous poll state ───────────────────────────────────────────────────────
+let prevLog     = [];
+let prevSym     = null;
+let isRecording = false;
+
+// ── Build symbol pickers ──────────────────────────────────────────────────────
+function mkGrid(id, syms) {
+  const g = document.getElementById(id);
+  syms.forEach(s => {
+    const b = document.createElement('button');
+    b.className   = 'sym-btn';
+    b.id          = 'sb-' + s;
+    b.textContent = s;
+    b.onclick     = () => selSym(s);
+    g.appendChild(b);
+  });
+}
+mkGrid('grid-L', LETTERS);
+mkGrid('grid-N', DIGITS);
+
+// ── Chart helpers ─────────────────────────────────────────────────────────────
+function ensureCanvas(att) {
+  if (!cvs[att]) {
+    const box   = document.getElementById(`chbox-${att}`);
+    const empty = document.getElementById(`chempty-${att}`);
+    if (empty) empty.remove();
+    const cv = document.createElement('canvas');
+    box.appendChild(cv);
+    cvs[att] = cv;
+  }
+  return cvs[att];
+}
+
+function removeCanvas(att) {
+  if (cvs[att]) {
+    cvs[att].remove();
+    cvs[att]   = null;
+    lastLen[att] = -1;
+    // restore "no data" placeholder
+    const box = document.getElementById(`chbox-${att}`);
+    if (!box.querySelector('.ch-empty')) {
+      const d = document.createElement('div');
+      d.className = 'ch-empty';
+      d.id        = `chempty-${att}`;
+      d.textContent = 'no data';
+      box.appendChild(d);
+    }
+  }
+}
+
+function drawChart(att, data) {
+  if (!data || data.length < 2) return;
+  if (data.length === lastLen[att]) return;   // nothing new to draw
+  lastLen[att] = data.length;
+
+  const cv  = ensureCanvas(att);
+  const dpr = window.devicePixelRatio || 1;
+  const W   = cv.offsetWidth  || cv.parentElement.clientWidth || 200;
+  const H   = 100;
+  cv.width  = W * dpr;
+  cv.height = H * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  const mn = Math.min(...data);
+  const mx = Math.max(...data);
+  const rng = mx - mn || 1;
+
+  // fill under curve
+  ctx.beginPath();
+  for (let i = 0; i < data.length; i++) {
+    const x = (i / (data.length - 1)) * W;
+    const y = H - ((data[i] - mn) / rng) * (H - 8) - 4;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = 'rgba(99,102,241,.12)';
+  ctx.fill();
+
+  // line
+  ctx.beginPath();
+  ctx.strokeStyle = '#6366f1';
+  ctx.lineWidth   = 1.4;
+  for (let i = 0; i < data.length; i++) {
+    const x = (i / (data.length - 1)) * W;
+    const y = H - ((data[i] - mn) / rng) * (H - 8) - 4;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // axis labels
+  ctx.fillStyle = '#333'; ctx.font = '9px system-ui';
+  ctx.fillText(mx, 3, 11);
+  ctx.fillText(mn, 3, H - 3);
+}
+
+function resetAllCharts() {
+  for (let a = 1; a <= 4; a++) removeCanvas(a);
+  Object.keys(dataCache).forEach(k => delete dataCache[k]);
+}
+
+// Async: fetch one attempt's data from server and draw it
+async function fetchAndDraw(sym, att) {
+  const key = `${sym}_${att}`;
+  if (dataCache[key]) {
+    drawChart(att, dataCache[key]);
+    return;
+  }
+  try {
+    const r = await fetch(`/api/attempt_data?symbol=${sym}&attempt=${att}`);
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.data && j.data.length > 0) {
+      dataCache[key] = j.data;
+      drawChart(att, j.data);
+    }
+  } catch(e) { /* ignore fetch errors */ }
+}
+
+// ── Main poll loop ────────────────────────────────────────────────────────────
+async function poll() {
+  let s;
+  try {
+    const r = await fetch('/api/state');
+    if (!r.ok) throw new Error('bad status');
+    s = await r.json();
+  } catch(e) {
+    document.getElementById('sbar-txt').textContent = 'Server not reachable – restart app.py';
+    document.getElementById('conn-dot').className   = 'dot recording';
+    return;
+  }
+
+  isRecording = s.recording;
+  const sym   = s.selected_symbol;
+  const att   = s.current_attempt;
+
+  // ── Status bar ──────────────────────────────────────────────────────────────
+  const dot = document.getElementById('conn-dot');
+  dot.className = s.recording ? 'dot recording' : 'dot';
+  document.getElementById('sbar-txt').textContent =
+    s.recording
+      ? `🔴  Recording  ${sym}_${att}…`
+      : `Connected · COM12`;
+  document.getElementById('sbar-right').textContent =
+    `${s.all_data_keys.length} recordings saved`;
+
+  // ── Big symbol & meta ───────────────────────────────────────────────────────
+  document.getElementById('sym-disp').textContent = sym || '–';
+  document.getElementById('sym-meta').textContent =
+    sym
+      ? `${s.volume.charAt(0).toUpperCase()+s.volume.slice(1)} · Attempt ${att} of 4`
+      : 'Select a symbol from the left panel';
+
+  // ── Sample progress ─────────────────────────────────────────────────────────
+  const sampPct = Math.min((s.samples / 2000) * 100, 100);
+  document.getElementById('samp-n').textContent =
+    s.recording ? s.samples : (s.samples > 0 ? s.samples : '–');
+  document.getElementById('samp-fill').style.width = sampPct + '%';
+
+  // ── Status text ─────────────────────────────────────────────────────────────
+  document.getElementById('status-txt').textContent = s.status || '–';
+
+  // ── Buttons ─────────────────────────────────────────────────────────────────
+  // Start: disabled only while recording
+  const btnStart = document.getElementById('btn-start');
+  btnStart.disabled     = s.recording;
+  btnStart.textContent  = s.recording ? '⏺ Recording…' : '▶ Start Recording';
+
+  // Skip / Next: disabled while recording
+  document.getElementById('btn-skip').disabled = s.recording;
+  document.getElementById('btn-next').disabled = s.recording;
+
+  // Export: available whenever there's at least one recording
+  document.getElementById('btn-exp').disabled = s.all_data_keys.length === 0;
+
+  // ── Attempt tabs ────────────────────────────────────────────────────────────
+  const tabs = document.getElementById('att-tabs').children;
+  for (let a = 1; a <= 4; a++) {
+    const tab  = tabs[a - 1];
+    const key  = `${sym}_${a}`;
+    const done = s.completed.includes(key);
+    const sel  = (a === att);
+    tab.className = 'att-tab' + (sel ? ' sel' : '') + (done ? ' done' : '');
+  }
+
+  // ── Symbol button styles ────────────────────────────────────────────────────
+  ;[...LETTERS, ...DIGITS].forEach(sym2 => {
+    const btn = document.getElementById('sb-' + sym2);
+    if (!btn) return;
+    const recs = [1,2,3,4].filter(a => s.all_data_keys.includes(`${sym2}_${a}`)).length;
+    const isSel = sym2 === sym;
+    btn.className = 'sym-btn' +
+      (isSel        ? ' sel'  :
+       recs === 4   ? ' full' :
+       recs > 0     ? ' part' : '');
+  });
+
+  // ── Chart updates ───────────────────────────────────────────────────────────
+  // When symbol changes, reset charts and evict cache
+  if (sym !== prevSym) {
+    resetAllCharts();
+    prevSym = sym;
+  }
+
+  for (let a = 1; a <= 4; a++) {
+    const key   = `${sym}_${a}`;
+    const title = document.getElementById(`chtitle-${a}`);
+    const box   = document.getElementById(`chbox-${a}`);
+
+    if (a === att) {
+      box.classList.add('active-att');
+      title.className = 'ch-title is-current';
+    } else {
+      box.classList.remove('active-att');
+    }
+
+    if (s.all_data_keys.includes(key)) {
+      title.className = title.className.replace('is-current','').trim() + (a === att ? ' is-current' : ' has-data');
+
+      if (a === att && s.recording && s.live_data.length > 0) {
+        // Live draw – bypass cache
+        drawChart(a, s.live_data);
+      } else if (!dataCache[key] || lastLen[a] < 0) {
+        fetchAndDraw(sym, a);
+      } else {
+        drawChart(a, dataCache[key]);
+      }
+    } else {
+      // No data for this attempt – ensure canvas is removed
+      if (cvs[a]) removeCanvas(a);
+      title.className = 'ch-title' + (a === att ? ' is-current' : '');
+    }
+  }
+
+  // After a recording finishes, refresh the cache for that attempt
+  if (!s.recording && s.samples >= 2000) {
+    const key = `${sym}_${att}`;
+    // If we just finished, the live_data IS the data – cache it
+    if (s.live_data && s.live_data.length >= 2000 && !dataCache[key]) {
+      dataCache[key] = s.live_data;
+      lastLen[att]   = -1;  // force redraw
+    }
+  }
+
+  // ── Log ─────────────────────────────────────────────────────────────────────
+  if (s.log.length !== prevLog.length) {
+    const el      = document.getElementById('log');
+    const newLines = s.log.slice(prevLog.length);
+    newLines.forEach(line => {
+      const d = document.createElement('div');
+      d.className   = 'ln-new';
+      d.textContent = line;
+      el.appendChild(d);
+      setTimeout(() => d.className = '', 2500);
+    });
+    el.scrollTop  = el.scrollHeight;
+    prevLog = [...s.log];
+  }
+}
+
+setInterval(poll, 350);
+poll();
+
+// ── User actions ──────────────────────────────────────────────────────────────
+async function selSym(sym) {
+  // Allow symbol switching even during recording? No – server will reject it.
+  // But we still send it and let server decide.
+  resetAllCharts();
+  prevSym = null;   // force chart refresh
+  await fetch('/api/select_symbol', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({symbol: sym})
+  });
+}
+
+async function selAtt(att) {
+  if (isRecording) return;
+  await fetch('/api/select_attempt', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({attempt: att})
+  });
+}
+
+function setVol(btn) {
+  document.querySelectorAll('[data-v]').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  fetch('/api/set_volume', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({volume: btn.dataset.v})
+  });
+}
+
+let sesTimer = null;
+function debSession(val) {
+  clearTimeout(sesTimer);
+  sesTimer = setTimeout(() => {
+    fetch('/api/set_session', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_name: val})
+    });
+    if (!document.getElementById('inp-exp').value)
+      document.getElementById('inp-exp').value = val;
+  }, 500);
+}
+
+function doStart() {
+  if (isRecording) return;
+  fetch('/api/start', {method:'POST'});
+}
+
+function doSkip() {
+  if (isRecording) return;
+  // Evict from cache so chart resets
+  const key = `${prevSym}_${document.querySelector('.att-tab.sel')?.textContent}`;
+  delete dataCache[key];
+  fetch('/api/skip', {method:'POST'});
+}
+
+function doNext() {
+  if (isRecording) return;
+  fetch('/api/next_attempt', {method:'POST'});
+}
+
+async function clearAll() {
+  if (!confirm('Delete ALL recorded data? This cannot be undone.')) return;
+  resetAllCharts();
+  prevSym = null;
+  await fetch('/api/clear', {method:'POST'});
+}
+
+async function doExport() {
+  const name = (document.getElementById('inp-exp').value ||
+                document.getElementById('inp-name').value || 'session').trim();
+  const btn  = document.getElementById('btn-exp');
+  const msg  = document.getElementById('exp-msg');
+  btn.disabled    = true;
+  msg.textContent = 'Building Excel file…';
+  msg.style.color = '#888';
+  try {
+    const res = await fetch('/api/export', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({filename: name})
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt);
+    }
+    const blob   = await res.blob();
+    const url    = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href     = url;
+    anchor.download = name.endsWith('.xlsx') ? name : name + '.xlsx';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    msg.textContent = '✓ Downloaded successfully';
+    msg.style.color = '#4ade80';
+    setTimeout(() => { msg.textContent = ''; }, 4000);
+  } catch(e) {
+    msg.textContent = '✗ ' + e.message;
+    msg.style.color = '#f87171';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (e.code === 'Space') { e.preventDefault(); doStart(); }
+  if (e.code === 'KeyS')  { e.preventDefault(); doSkip();  }
+  if (e.code === 'KeyN')  { e.preventDefault(); doNext();  }
+});
+</script>
+</body>
+</html>
